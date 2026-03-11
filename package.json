@@ -1,0 +1,42 @@
+{
+  "name": "sui-delta-ts",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "check": "tsx src/scripts/check-bluefin.ts",
+    "open-short": "tsx src/scripts/open-short.ts",
+    "close": "tsx src/scripts/close-position.ts",
+    "watch": "tsx src/scripts/watch-fr.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/howlrs/sui-delta-ts.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/howlrs/sui-delta-ts/issues"
+  },
+  "homepage": "https://github.com/howlrs/sui-delta-ts#readme",
+  "dependencies": {
+    "@bluefin-exchange/pro-sdk": "^1.13.0",
+    "@mysten/sui": "^1.45.2",
+    "dotenv": "^17.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.4.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
