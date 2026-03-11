@@ -1,0 +1,17 @@
+services:
+  watch:
+    build: .
+    command: tsx src/scripts/watch-fr.ts
+    restart: unless-stopped
+    env_file: .env
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  cli:
+    build: .
+    profiles: [cli]
+    env_file: .env
+    entrypoint: ["tsx"]
