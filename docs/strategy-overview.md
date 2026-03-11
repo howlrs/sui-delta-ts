@@ -112,6 +112,9 @@ $X = $9,091
 - [research/fee-compound-il-analysis.md](research/fee-compound-il-analysis.md) — IL・リバランスコスト分析
 - [2026-03-03-deepbook-hedge-design.md](2026-03-03-deepbook-hedge-design.md) — DeepBook ヘッジ設計 (先行参考)
 
+### Rebalancing Research (HIGH relevance)
+- [research/rebalancing-after-hedge-reentry.md](research/rebalancing-after-hedge-reentry.md) — Delta-neutral rebalancing after hedge removal/re-entry (Ethena, Rage Trade, Neutra, Hedgy, HL-Delta, Umami)
+
 ### Context (MEDIUM relevance)
 - [research/lp-strategy-analysis.md](research/lp-strategy-analysis.md) — LP 収益性分析
 - [research/pool-position-analysis.md](research/pool-position-analysis.md) — プール構造分析
