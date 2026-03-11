@@ -266,7 +266,19 @@ async function tick(client: BluefinProSdk): Promise<void> {
       }
     }
 
-    // F. Margin health warning: margin ratio < 12%
+    // F. Margin stop: unrealized PnL / margin <= marginStopPct
+    if (!closeReason) {
+      const unrealizedPnl = fromE9(position.unrealizedPnlE9);
+      const marginRequired = fromE9(position.marginRequiredE9);
+      if (marginRequired > 0) {
+        const pnlRatio = unrealizedPnl / marginRequired;
+        if (pnlRatio <= profile.marginStopPct) {
+          closeReason = `margin stop: uPnL/margin ${fmtPct(pnlRatio)} <= ${fmtPct(profile.marginStopPct)}`;
+        }
+      }
+    }
+
+    // G. Margin health warning: margin ratio < 12%
     const accountValue = fromE9(account.totalAccountValueE9);
     const marginAvailable = fromE9(account.marginAvailableE9);
     if (accountValue > 0) {
