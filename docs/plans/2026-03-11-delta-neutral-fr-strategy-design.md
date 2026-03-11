@@ -98,7 +98,7 @@ interface AssetProfile {
 | 7d FR floor | -0.50% × σ_r | -0.50% | -0.25% | -0.86% |
 | Re-entry positive h | max(4, floor(6×σ_r)) | 6 | 4 | 10 |
 | Re-entry wait h | max(6, floor(12/σ_r)) | 12 | 24 | 7 |
-| Margin stop | -min(25%, max(10%, 15%×σ_r)) | -15% | -10% | -25% |
+| Margin stop | -min(60%, max(30%, 50%×σ_r)) | -50% | -30% | -60% |
 | Circuit breaker | 3 × σ_h × 100 | 2.1%/h | 1.05%/h | 3.6%/h |
 
 ## 5. Watch-FR Monitoring Design
@@ -119,7 +119,7 @@ interface AssetProfile {
 ```
 negative_consecutive_hours >= negFrHoursExit (SUI: 18h)
 cumulative_fr_loss_7d >= cumulativeFrFloor7d (SUI: -0.50%)
-unrealized_pnl_margin <= marginStopPct (SUI: -15%)
+unrealized_pnl_margin <= marginStopPct (SUI: -50%)
 rolling_168h_avg_fr < 0.0000%/h (universal)
 open_interest < oiFloor (SUI: $200K)
 hourly_price_change > circuitBreakerPct (SUI: 2.1%)

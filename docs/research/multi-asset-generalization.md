@@ -282,17 +282,22 @@ Higher-vol assets need tighter rebalancing because drift accumulates faster.
 
 ### 4i. Margin Stop (Maximum Acceptable Margin Loss)
 
+**Revised**: Old formula (-15% for SUI) triggered at +2.9% price move, which fires
+almost daily given SUI's 3.4% daily volatility. In a delta-neutral strategy, short-side
+losses are offset by spot gains, so the margin stop should protect against Bluefin
+liquidation only — not react to normal price noise.
+
 ```
-margin_stop_pct = -1 * min(25%, max(10%, 15% * (σ_h_asset / σ_h_SUI)))
+margin_stop_pct = -1 * min(60%, max(30%, 50% * (σ_h_asset / σ_h_SUI)))
 
 ```
 
-| Asset | σ_h | Margin stop |
-|-------|-----|------------|
-| BTC | 0.35% | -10% (floor) |
-| ETH | 0.50% | -11% |
-| SUI | 0.70% | -15% (reference) |
-| High-vol | 1.20% | -25% (cap) |
+| Asset | σ_h | Margin stop | Trigger price Δ | Est. frequency | Buffer to liquidation |
+|-------|-----|------------|-----------------|----------------|----------------------|
+| BTC | 0.35% | -30% (floor) | ~+2.1% | Weekly | - |
+| ETH | 0.50% | -36% | ~+5% | Monthly | - |
+| SUI | 0.70% | -50% (reference) | ~+9.8% | <1x/month | 6.9% |
+| High-vol | 1.20% | -60% (cap) | ~+15% | Rare | 1.7% |
 
 ---
 
@@ -501,7 +506,7 @@ Reference table with all formulas. `σ_r` = `σ_h_asset / σ_h_SUI` (relative vo
 | Re-entry wait h | `max(6, floor(12 / σ_r))` | 12 | 24 | 7 | [6, 24] |
 | OI floor | `max(200K, notional/0.02)` | $200K | $200K | $200K | [$200K, inf] |
 | Delta tolerance | `max(2%, min(5%, 3%/σ_r))` | 3% | 5% | 2% | [2%, 5%] |
-| Margin stop | `-min(25%, max(10%, 15%*σ_r))` | -15% | -10% | -25% | [-25%, -10%] |
+| Margin stop | `-min(60%, max(30%, 50%*σ_r))` | -50% | -30% | -60% | [-60%, -30%] |
 | Rolling avg FR close | `0.0000%` | 0.0000% | 0.0000% | 0.0000% | universal |
 | Circuit breaker | `3 * σ_h * 100` | 2.1%/h | 1.05%/h | 3.6%/h | per-hour |
 
