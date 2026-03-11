@@ -39,7 +39,9 @@ export function deriveProfile(input: AssetProfileInput): AssetProfile {
   const reentryWaitHours = Math.min(24, Math.max(6, Math.floor(12 / sigmaR)));
   const oiFloor = 200_000;
   const deltaTolerancePct = Math.min(0.05, Math.max(0.02, 0.03 / sigmaR));
-  const marginStopPct = -Math.min(0.25, Math.max(0.10, 0.15 * sigmaR));
+  // Old: -min(0.25, max(0.10, 0.15*σ_r)) → SUI -15% → +2.9% price で発火 → 日次ボラ3.4%でほぼ毎日発火
+  // New: -min(0.60, max(0.30, 0.50*σ_r)) → SUI -50% → +9.8% price で発火 → 月1回以下
+  const marginStopPct = -Math.min(0.60, Math.max(0.30, 0.50 * sigmaR));
   const circuitBreakerPct = 3 * sigmaH;
 
   return {
