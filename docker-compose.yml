@@ -4,6 +4,10 @@ services:
     command: tsx src/scripts/watch-fr.ts
     restart: unless-stopped
     env_file: .env
+    volumes:
+      - watch-state:/app/data
+    environment:
+      - STATE_FILE=/app/data/state.json
     logging:
       driver: json-file
       options:
@@ -15,3 +19,6 @@ services:
     profiles: [cli]
     env_file: .env
     entrypoint: ["tsx"]
+
+volumes:
+  watch-state:

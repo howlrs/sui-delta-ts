@@ -18,6 +18,9 @@ import { CONFIG } from "../lib/config.js";
 import { fromE9, toE9, fmt, fmtUsd, fmtPct } from "../lib/format.js";
 import { deriveProfile } from "../lib/asset-profile.js";
 import type { AssetProfile, AssetProfileInput } from "../lib/asset-profile.js";
+import { loadState, saveState } from "../lib/state.js";
+import type { WatchState } from "../lib/state.js";
+import { notify } from "../lib/notify.js";
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -46,25 +49,14 @@ const DEFAULT_PROFILE_INPUT: AssetProfileInput = {
 const profile: AssetProfile = deriveProfile(DEFAULT_PROFILE_INPUT);
 
 // ---------------------------------------------------------------------------
-// State
+// State (persisted to disk)
 // ---------------------------------------------------------------------------
-interface WatchState {
-  negativeStreakHours: number;
-  frHistory7d: number[]; // last 168 hourly FR values
-  lastCloseTime: number | null;
-  positionOpen: boolean;
-  totalFrEarned: number;
-  lastPrice: number | null; // for circuit breaker
-}
+const state: WatchState = loadState();
 
-const state: WatchState = {
-  negativeStreakHours: 0,
-  frHistory7d: [],
-  lastCloseTime: null,
-  positionOpen: false,
-  totalFrEarned: 0,
-  lastPrice: null,
-};
+// ---------------------------------------------------------------------------
+// Tick guard — prevent overlapping ticks
+// ---------------------------------------------------------------------------
+let tickRunning = false;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -88,9 +80,7 @@ async function closePosition(
   const closeSide =
     position.side === PositionSide.Long ? OrderSide.Short : OrderSide.Long;
 
-  console.log(
-    `[${ts()}] CLOSING position (${reason}): ${position.side} ${fmt(posSize)} ${symbol}`,
-  );
+  await notify("critical", `CLOSING ${position.side} ${fmt(posSize)} ${symbol}: ${reason}`);
 
   const orderParams: OrderParams = {
     clientOrderId: randomUUID(),
@@ -114,6 +104,7 @@ async function closePosition(
 
   state.positionOpen = false;
   state.lastCloseTime = Date.now();
+  saveState(state);
 }
 
 /**
@@ -125,7 +116,7 @@ async function reenterShort(
   symbol: string,
   price: number,
 ): Promise<void> {
-  console.log(`[${ts()}] RE-ENTERING short on ${symbol} @ ~${fmtUsd(price)}`);
+  await notify("warn", `RE-ENTERING short on ${symbol} @ ~${fmtUsd(price)}`);
 
   // Get account state to determine available balance
   const { data: account }: { data: Account } =
@@ -138,9 +129,7 @@ async function reenterShort(
   const quantity = notional / price;
 
   if (quantity <= 0 || notional < 10) {
-    console.log(
-      `[${ts()}] Insufficient balance for re-entry: ${fmtUsd(balance)}`,
-    );
+    await notify("critical", `Insufficient balance for re-entry: ${fmtUsd(balance)}`);
     return;
   }
 
@@ -172,6 +161,7 @@ async function reenterShort(
   );
 
   state.positionOpen = true;
+  saveState(state);
 }
 
 // ---------------------------------------------------------------------------
@@ -284,9 +274,7 @@ async function tick(client: BluefinProSdk): Promise<void> {
     if (accountValue > 0) {
       const marginRatio = marginAvailable / accountValue;
       if (marginRatio < 0.12) {
-        console.log(
-          `[${ts()}] WARNING: Margin ratio ${fmtPct(marginRatio)} < 12%`,
-        );
+        await notify("warn", `Margin ratio ${fmtPct(marginRatio)} < 12%`);
       }
     }
 
@@ -333,6 +321,9 @@ async function tick(client: BluefinProSdk): Promise<void> {
 
   // Update lastPrice for next iteration's circuit breaker
   state.lastPrice = price;
+
+  // Persist state after every tick
+  saveState(state);
 }
 
 // ---------------------------------------------------------------------------
@@ -341,20 +332,31 @@ async function tick(client: BluefinProSdk): Promise<void> {
 async function main(): Promise<void> {
   const symbol = CONFIG.symbol;
   console.log(`\n=== watch-fr daemon | ${symbol} | interval=${intervalMs / 1000}s ===`);
-  console.log(`Profile: leverage=${profile.leverage}x negFrExit=${profile.negFrHoursExit}h cumFloor7d=${fmtPct(profile.cumulativeFrFloor7d)} reentryWait=${profile.reentryWaitHours}h reentryPos=${profile.reentryPositiveHours}h oiFloor=${fmtUsd(profile.oiFloor)} circuitBreaker=${fmtPct(profile.circuitBreakerPct)}\n`);
+  console.log(`Profile: leverage=${profile.leverage}x negFrExit=${profile.negFrHoursExit}h cumFloor7d=${fmtPct(profile.cumulativeFrFloor7d)} marginStop=${fmtPct(profile.marginStopPct)} reentryWait=${profile.reentryWaitHours}h reentryPos=${profile.reentryPositiveHours}h oiFloor=${fmtUsd(profile.oiFloor)} circuitBreaker=${fmtPct(profile.circuitBreakerPct)}\n`);
+
+  // Log restored state
+  if (state.lastCloseTime !== null) {
+    const ago = ((Date.now() - state.lastCloseTime) / 3_600_000).toFixed(1);
+    console.log(`[${ts()}] Restored state: lastClose=${ago}h ago, streak=${state.negativeStreakHours}h, frHistory=${state.frHistory7d.length} entries, totalFR=${fmtPct(state.totalFrEarned)}`);
+  }
 
   const client = await createBluefinClient();
 
-  // Seed FR history with available data
-  try {
-    const frRes = await client.exchangeDataApi.getFundingRateHistory(symbol, 168);
-    const frEntries = frRes.data;
-    for (const entry of frEntries) {
-      state.frHistory7d.push(fromE9(entry.fundingRateE9));
+  // Seed FR history only if state was empty (fresh start)
+  if (state.frHistory7d.length === 0) {
+    try {
+      const frRes = await client.exchangeDataApi.getFundingRateHistory(symbol, 168);
+      const frEntries = frRes.data;
+      for (const entry of frEntries) {
+        state.frHistory7d.push(fromE9(entry.fundingRateE9));
+      }
+      console.log(`[${ts()}] Seeded ${state.frHistory7d.length} historical FR values`);
+      saveState(state);
+    } catch (err) {
+      console.log(`[${ts()}] Could not seed FR history: ${err}`);
     }
-    console.log(`[${ts()}] Seeded ${state.frHistory7d.length} historical FR values`);
-  } catch (err) {
-    console.log(`[${ts()}] Could not seed FR history: ${err}`);
+  } else {
+    console.log(`[${ts()}] Using ${state.frHistory7d.length} FR values from persisted state`);
   }
 
   // Check initial position state
@@ -372,19 +374,30 @@ async function main(): Promise<void> {
     console.log(`[${ts()}] Could not check initial position: ${err}`);
   }
 
-  // Run first tick immediately, then on interval
+  await notify("info", `watch-fr started: ${symbol}, interval=${intervalMs / 1000}s`);
+
+  // Run first tick immediately, then on interval with overlap guard
   await tick(client);
 
   setInterval(async () => {
+    if (tickRunning) {
+      console.log(`[${ts()}] Tick skipped (previous still running)`);
+      return;
+    }
+    tickRunning = true;
     try {
       await tick(client);
     } catch (err) {
       console.error(`[${ts()}] Tick error:`, err);
+      await notify("critical", `Tick error: ${err}`);
+    } finally {
+      tickRunning = false;
     }
   }, intervalMs);
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error("Fatal:", err);
+  await notify("critical", `watch-fr FATAL: ${err}`);
   process.exit(1);
 });
